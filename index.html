@@ -28,7 +28,6 @@
     box-sizing: border-box;
 }
 
-
 input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear {
     display: none;
@@ -917,9 +916,6 @@ body.dark-mode .offer {
     background: #1a1a1a;
 }
 
-/* .site-navbar deliberately stays green in dark mode too — see base
-   .site-navbar rule above (this is intentional, not an oversight). */
-
 body.dark-mode p,
 body.dark-mode h4,
 body.dark-mode small,
@@ -1389,9 +1385,6 @@ body.dark-mode .info-section {
 body.dark-mode .info-content strong {
     color: #f0f0f0;
 }
-
-/* .page-transition-overlay deliberately stays green in dark mode too —
-   see base .page-transition-overlay rule below (intentional). */
 
 .page-transition-overlay {
     position: fixed;
@@ -7386,10 +7379,6 @@ body.dark-mode .wishlist-item {
         return null;
     }
 
-    // Read-only view of the panel's seller/admin role assignments
-    // (cvspee/orderManageAccounts, managed by the admin panel's
-    // referral system). We only READ this from the site — promotions
-    // themselves happen in the panel, never here.
     db.collection("cvspee").doc("orderManageAccounts").onSnapshot(function (doc) {
         _cloud.panelRoles = (doc.exists && doc.data().map) ? doc.data().map : {};
         _cloud.ready.panelRoles = true;
@@ -7416,12 +7405,6 @@ body.dark-mode .wishlist-item {
         _onCloudChange("products");
     }, function (err) { console.error("products sync error", err); });
 
-    // Orders live in their own subcollection (one Firestore document per
-    // order) instead of a single "cvspee/orders" doc holding a giant array.
-    // A single doc has a hard 1MB size cap, and payment-proof screenshots
-    // (base64 images) plus delivery details pushed that doc over the limit
-    // as orders piled up, causing "couldn't save order" failures. Each
-    // order now gets its own doc, so there's effectively no shared cap.
     migrateLegacyOrdersIfNeeded();
 
     db.collection("cvspeeOrders").orderBy("id").onSnapshot(function (snapshot) {
@@ -7546,15 +7529,6 @@ body.dark-mode .wishlist-item {
             });
     }
 
-    // Reads + writes the users list atomically via a Firestore transaction.
-    // Fixes accounts getting silently wiped out: the old code read the
-    // locally cached list, edited it, then overwrote the WHOLE document.
-    // If two people signed up / edited their profile around the same time,
-    // whoever saved last would clobber the other's change and drop their
-    // account (sometimes even the owner account, since seeding used the
-    // same unsafe pattern). Using a transaction forces every write to read
-    // the latest server copy first, so concurrent changes can't erase each
-    // other anymore.
     function updateUsers(mutator, onDone, onError) {
         var ref = db.collection("cvspee").doc("users");
         db.runTransaction(function (transaction) {
@@ -7585,8 +7559,6 @@ body.dark-mode .wishlist-item {
     }
 
     function isCvsuEmail(email) {
-        // Matches "...@cvsu.edu.ph" as well as campus subdomains like
-        // "...@imus.cvsu.edu.ph" — anything ending in cvsu.edu.ph.
         return /@([a-z0-9-]+\.)*cvsu\.edu\.ph$/i.test((email || "").trim());
     }
 
@@ -7758,10 +7730,10 @@ body.dark-mode .wishlist-item {
     var VERIFY_ID_ENDPOINT = "https://cvspee-production.up.railway.app/api/verify-id";
 
     var idScanStream = null;
-    var idScanMode = "id"; // "id" -> scanning the ID card; "selfie" -> selfie holding the ID
-    var idScanOrientation = "landscape"; // "landscape" or "portrait" — only applies to the "id" step
-    var signupCapturedIdImage = null;     // data URL of the confirmed ID scan
-    var signupCapturedSelfieImage = null; // data URL of the confirmed selfie+ID
+    var idScanMode = "id";
+    var idScanOrientation = "landscape";
+    var signupCapturedIdImage = null;
+    var signupCapturedSelfieImage = null;
 
     function setIdScanOrientation(orientation) {
         idScanOrientation = orientation;
@@ -7769,7 +7741,6 @@ body.dark-mode .wishlist-item {
         document.getElementById("idScanOrientPortraitBtn").classList.toggle("active", orientation === "portrait");
         document.getElementById("idScanFrameWrap").classList.toggle("portrait-mode", orientation === "portrait");
         document.getElementById("idScanGuide").classList.toggle("id-scan-guide-portrait", orientation === "portrait");
-        // Changing orientation resets the "hold steady" progress.
         idScanStableCount = 0;
     }
 
@@ -7780,8 +7751,6 @@ body.dark-mode .wishlist-item {
             return;
         }
 
-        // Always start over from the "id" step so we never pair a
-        // mismatched ID and selfie from different attempts.
         signupCapturedIdImage = null;
         signupCapturedSelfieImage = null;
         document.getElementById("signupIdPreview").style.display = "none";
@@ -7843,20 +7812,6 @@ body.dark-mode .wishlist-item {
         });
     }
 
-    // ------------------------------------------------------------
-    // Lightweight "hold steady" auto-capture.
-    //
-    // This does NOT do real rectangle/edge detection of the ID card —
-    // that would need a heavier library (e.g. OpenCV.js) or an ML
-    // model. Instead it checks, on the whole video frame, a few cheap
-    // signals every ~250ms: is it bright enough (not too dark/too much
-    // glare), is it reasonably sharp (not blurry/still moving into
-    // place), and is it stable frame-to-frame (not currently moving).
-    // When all three hold for about a second, it auto-triggers the
-    // same capture the "Capture Now" button uses. The on-screen guide
-    // frame is what actually gets the ID positioned correctly; this
-    // loop just decides *when* the shot looks good enough to take.
-    // ------------------------------------------------------------
     var idScanAutoTimer = null;
     var idScanAutoCanvas = document.createElement("canvas");
     var idScanPrevGray = null;
@@ -7890,7 +7845,7 @@ body.dark-mode .wishlist-item {
         try {
             frame = ctx.getImageData(0, 0, w, h).data;
         } catch (e) {
-            return; // e.g. tainted canvas — just skip this tick
+            return;
         }
 
         var gray = new Float32Array(w * h);
@@ -7950,7 +7905,7 @@ body.dark-mode .wishlist-item {
         guide.classList.add("id-scan-guide-good");
         hint.textContent = "Looks good — capturing...";
 
-        if (idScanStableCount >= 4) { // ~1 second of steady, clear frames
+        if (idScanStableCount >= 4) {
             stopAutoCaptureLoop();
             captureIdPhoto();
         }
@@ -8018,7 +7973,6 @@ body.dark-mode .wishlist-item {
             idPreview.src = signupCapturedIdImage;
             idPreview.style.display = "block";
 
-            // Move straight on to the next step — selfie holding the ID.
             idScanMode = "selfie";
             openIdScanner();
             return;
@@ -8044,7 +7998,7 @@ body.dark-mode .wishlist-item {
 
     var _banAppealEmail = "";
     var _banAppealName = "";
-    var _pendingAccountAppeal = null; // { record, email, name } — set by renderAccount's banned view
+    var _pendingAccountAppeal = null;
 
     function openBanAppealFromAccountPage() {
         if (!_pendingAccountAppeal) return;
@@ -8229,9 +8183,6 @@ body.dark-mode .wishlist-item {
             errorEl.textContent = "";
             submitBtn.textContent = "Preparing your account...";
 
-            // Keep small, storage-friendly copies of the photos so an
-            // admin can review them later in the panel — separate from
-            // the larger copies already sent to the AI check above.
             Promise.all([
                 downscaleDataUrl(signupCapturedIdImage, 700, 0.6),
                 downscaleDataUrl(signupCapturedSelfieImage, 700, 0.6)
@@ -8352,10 +8303,6 @@ body.dark-mode .wishlist-item {
         }, function () {
             setCurrentUser(pending.email);
 
-            // Store the ID/selfie photos in their own per-user document —
-            // NOT inside the shared users list doc — so the panel can
-            // show them to the owner without risking that shared doc
-            // growing past Firestore's per-document size limit.
             if (pending.idPhoto || pending.selfiePhoto) {
                 db.collection("cvspee").doc("idPhotosRoot").collection("byEmail").doc(pending.email).set({
                     idImage: pending.idPhoto || "",
@@ -8635,13 +8582,6 @@ body.dark-mode .wishlist-item {
         reader.readAsDataURL(input.files[0]);
     }
 
-    // Resizes/compresses an uploaded image before it's stored as base64.
-    // Firestore documents cap out at 1MB, and several docs in this app
-    // (orders, comments) store many base64 photos inside ONE document, so
-    // uncompressed camera photos (often several MB each) can quickly push a
-    // doc over the limit — after which every further save to that doc fails
-    // silently. Always route photo uploads (other than the small avatar)
-    // through this so they stay small.
     function readImageAsResizedDataUrl(file, maxDim, quality, onDone, onError) {
         var reader = new FileReader();
         reader.onload = function (e) {
@@ -8961,8 +8901,6 @@ body.dark-mode .wishlist-item {
         return !!(product.createdAt && (Date.now() - product.createdAt) < NEW_PRODUCT_WINDOW_MS);
     }
 
-    // Normalizes a manually-typed category so "Bag", "bag", "Bags", "BAGS", etc.
-    // all match as the same category. Lowercase + trim + strip one trailing "s".
     function normalizeCategory(raw) {
         var c = (raw || "").toString().trim().toLowerCase();
         if (c.length > 1 && c.charAt(c.length - 1) === "s") {
@@ -9105,7 +9043,7 @@ body.dark-mode .wishlist-item {
     }
 
     var newProductFilterActive = false;
-    var activeCategoryFilter = null; // null = "All"; otherwise a normalized category string
+    var activeCategoryFilter = null;
     var categoryFilterPanelOpen = false;
 
     function handleNewProductFilterChange() {
@@ -12903,12 +12841,6 @@ body.dark-mode .wishlist-item {
         return [a, b].sort().join("::");
     }
 
-    // ------------------------------------------------------------
-    // New-message notification sound
-    // ------------------------------------------------------------
-    // Synthesized in code (Web Audio API) instead of loading an audio
-    // file — no external file/path/hosting to go wrong, and no risk of
-    // a shared <audio> element getting stuck after the first play.
     var _lastSeenNewestDmTs = 0;
     var _dmSoundInitialized = false;
     var _dmSoundWarmupUntil = 0;
@@ -12933,10 +12865,6 @@ body.dark-mode .wishlist-item {
         return _notifAudioCtx;
     }
 
-    // Browsers only let an AudioContext actually produce sound after the
-    // page has had at least one real user interaction (click/tap/key).
-    // Creating/resuming it early on that first interaction "unlocks" it
-    // so the real notification later isn't the one that gets blocked.
     var _dmSoundUnlocked = false;
     function unlockMessageNotificationSound() {
         if (_dmSoundUnlocked) return;
@@ -12973,7 +12901,6 @@ body.dark-mode .wishlist-item {
             var ctx = getNotifAudioCtx();
             if (!ctx) return;
             var now = ctx.currentTime;
-            // Simple two-note "ding-dong" chime.
             playTone(ctx, 880, now, 0.18, 0.16);
             playTone(ctx, 659, now + 0.13, 0.16, 0.2);
         } catch (e) {
@@ -13002,12 +12929,6 @@ body.dark-mode .wishlist-item {
         });
 
         if (!_dmSoundInitialized) {
-            // First check after load/login — lock in a starting baseline
-            // and open a short "warmup" window (rather than a sound
-            // right away) so pre-existing messages don't trigger a
-            // false ding, and so a stale-cache-then-fresh-server jump
-            // (common with Firestore offline persistence) has time to
-            // settle before we start comparing for real.
             _lastSeenNewestDmTs = newestFromOthersTs;
             _dmSoundInitialized = true;
             _dmSoundWarmupUntil = Date.now() + DM_SOUND_WARMUP_MS;
